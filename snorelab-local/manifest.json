@@ -1,0 +1,20 @@
+{
+  "name": "SnoreNoMore",
+  "short_name": "SnoreNoMore",
+  "description": "Measure your snoring overnight, score it, and see what actually helps — 100% on your device.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "categories": ["health", "lifestyle", "medical"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20512%20512'%3E%3Crect%20width%3D'512'%20height%3D'512'%20rx%3D'112'%20fill%3D'%23020617'%2F%3E%3Cpath%20d%3D'M300%20120a112%20112%200%201%200%2092%20176%20140%20140%200%201%201-92-176Z'%20fill%3D'%2338bdf8'%2F%3E%3Cg%20fill%3D'none'%20stroke%3D'%2310b981'%20stroke-width%3D'22'%20stroke-linecap%3D'round'%3E%3Cpath%20d%3D'M120%20360h30M180%20360h40M250%20360h26M306%20360h50M386%20360h20'%2F%3E%3C%2Fg%3E%3Ctext%20x%3D'360'%20y%3D'190'%20font-family%3D'Arial'%20font-size%3D'96'%20font-weight%3D'700'%20fill%3D'%23fbbf24'%3EZ%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

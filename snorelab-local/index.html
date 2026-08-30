@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <title>SnoreNoMore</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#020617" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SnoreNoMore" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20512%20512'%3E%3Crect%20width%3D'512'%20height%3D'512'%20rx%3D'112'%20fill%3D'%23020617'%2F%3E%3Cpath%20d%3D'M300%20120a112%20112%200%201%200%2092%20176%20140%20140%200%201%201-92-176Z'%20fill%3D'%2338bdf8'%2F%3E%3C%2Fsvg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+  <style>
+    html, body { background: #020617; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body { overscroll-behavior-y: none; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    .no-select { -webkit-user-select: none; user-select: none; }
+    @keyframes pulseRing { 0% { transform: scale(0.9); opacity: 0.7; } 70% { transform: scale(1.25); opacity: 0; } 100% { opacity: 0; } }
+    .rec-ring { animation: pulseRing 2s infinite ease-out; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-up { animation: fadeUp 0.25s ease-out both; }
+  </style>
+</head>
+<body class="text-slate-100 font-sans">
+  <div id="app"></div>
+
+  <script type="module">
+    import { h, render } from 'https://esm.sh/preact@10.24.3';
+    import { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/preact@10.24.3/hooks';
+    import htm from 'https://esm.sh/htm@3.1.1';
+    const html = htm.bind(h);
+
+    /* ========================= Constants ========================= */
+    const STORAGE_KEY = 'snorenomore.nights';
+    const SEED_FLAG = 'snorenomore.seeded';
+
+    const LEVELS = ['Quiet', 'Light', 'Loud', 'Epic', 'Noise'];
+    const LEVEL_COLORS = {
+      Quiet: '#10b981', // emerald - calm
+      Light: '#eab308', // yellow
+      Loud:  '#f97316', // orange
+      Epic:  '#ef4444', // red
+      Noise: '#64748b', // slate - external noise
+    };
+    const SNORE_LEVELS = ['Light', 'Loud', 'Epic'];
+
+    const REMEDIES = [
+      { name: 'Side Sleeping', icon: 'bed',       info: 'Sleeping on your side keeps the airway open and often reduces snoring versus back sleeping.' },
+      { name: 'Nasal Strip',   icon: 'bandage',   info: 'An adhesive strip that widens the nostrils to ease nasal airflow.' },
+      { name: 'CPAP',          icon: 'wind',      info: 'Continuous Positive Airway Pressure device, usually prescribed for sleep apnea.' },
+      { name: 'Mouthpiece',    icon: 'smile',     info: 'A mandibular advancement device that gently holds the jaw forward.' },
+      { name: 'Mouth Tape',    icon: 'tape',      info: 'Gentle tape encouraging nasal breathing. Use with care and never if congested.' },
+      { name: 'SnoreGym',      icon: 'dumbbell',  info: 'Daily mouth and throat muscle exercises to tone the airway.' },
+    ];
+    const FACTORS = [
+      { name: 'Alcohol',        icon: 'wine',        info: 'Alcohol relaxes throat muscles and typically worsens snoring.' },
+      { name: 'Exhaustion',     icon: 'battery',     info: 'Being overtired can deepen sleep and increase snoring.' },
+      { name: 'Four Hour Fast', icon: 'clock',       info: 'No food for four hours before bed; may reduce reflux-related snoring.' },
+      { name: 'Ate Late',       icon: 'utensils',    info: 'Eating close to bedtime can worsen snoring.' },
+      { name: 'Blocked Nose',   icon: 'thermometer', info: 'Nasal congestion forces mouth breathing and more snoring.' },
+      { name: 'Weight',         icon: 'scale',       info: 'Higher body weight is associated with more airway obstruction.' },
+    ];
+    const REMEDY_MAP = Object.fromEntries(REMEDIES.map(r => [r.name, r]));
+    const FACTOR_MAP = Object.fromEntries(FACTORS.map(f => [f.name, f]));
+    const DELAYS = [5, 10, 15, 20, 30];
+    const MAX_REMEDIES = 3;
+    const MAX_FACTORS = 2;
+    const DISCLAIMER = 'Not medical advice. For apnea risk see doctor.';
+
+    /* ========================= Icons (lucide inline) ========================= */
+    const ICONS = {
+      moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+      list: '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
+      trending: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+      search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+      check: '<path d="M20 6 9 17l-5-5"/>',
+      x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+      play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+      square: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+      plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+      bed: '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
+      bandage: '<rect width="20" height="12" x="2" y="6" rx="6"/><path d="M10 10h.01"/><path d="M10 14h.01"/><path d="M14 10h.01"/><path d="M14 14h.01"/>',
+      wind: '<path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>',
+      smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/>',
+      tape: '<circle cx="12" cy="12" r="10"/><path d="M4 12h16"/><path d="M12 4v16"/>',
+      dumbbell: '<path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>',
+      wine: '<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
+      battery: '<rect width="16" height="10" x="2" y="7" rx="2"/><line x1="22" x2="22" y1="11" y2="13"/><line x1="6" x2="6" y1="11" y2="13"/>',
+      clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      utensils: '<path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+      thermometer: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+      scale: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+      music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+      sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/>',
+      chevron: '<path d="m9 18 6-6-6-6"/>',
+      shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/>',
+      zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+      flask: '<path d="M9 3h6"/><path d="M10 3v6.5L4.5 18a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M7 15h10"/>',
+      circle: '<circle cx="12" cy="12" r="10"/>',
+      trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    };
+    function Icon({ name, size = 20, cls = '', stroke = 2 }) {
+      return html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width=${stroke} stroke-linecap="round" stroke-linejoin="round" class=${'shrink-0 ' + cls}
+        dangerouslySetInnerHTML=${{ __html: ICONS[name] || ICONS.circle }}></svg>`;
+    }
+
+    /* ========================= Utilities ========================= */
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function fmtDur(ms) {
+      if (!ms || ms < 0) ms = 0;
+      const m = Math.round(ms / 60000);
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      if (h <= 0) return mm + 'm';
+      return h + 'h ' + mm + 'm';
+    }
+    function fmtClock(ts) {
+      return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    function fmtDayLabel(ts) {
+      return new Date(ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    function monthKey(ts) {
+      const d = new Date(ts);
+      return d.getFullYear() + '-' + String(d.getMonth()).padStart(2, '0');
+    }
+    function monthLabel(ts) {
+      return new Date(ts).toLocaleDateString([], { month: 'long', year: 'numeric' });
+    }
+    function scoreColor(s) {
+      if (s < 2) return '#10b981';
+      if (s < 5) return '#eab308';
+      if (s < 7) return '#f97316';
+      return '#ef4444';
+    }
+    function scoreWord(s) {
+      if (s < 1) return 'Silent';
+      if (s < 2.5) return 'Minimal';
+      if (s < 4.5) return 'Mild';
+      if (s < 7) return 'Moderate';
+      return 'Heavy';
+    }
+    function uid() { return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+    /* ========================= Domain: metrics ========================= */
+    const WEIGHT = { Quiet: 0, Light: 1, Loud: 2.2, Epic: 3, Noise: 0 };
+    function computeMetrics(start, end, delayMinutes, segments) {
+      const delayMs = delayMinutes * 60000;
+      let segTotal = 0, timeSnoring = 0, weighted = 0;
+      for (const s of segments) {
+        const d = s.tEnd - s.tStart;
+        segTotal += d;
+        if (SNORE_LEVELS.includes(s.level)) timeSnoring += d;
+        weighted += (WEIGHT[s.level] || 0) * d;
+      }
+      let timeInBed = end - start - delayMs;
+      if (timeInBed <= 0) timeInBed = segTotal;
+      const base = timeInBed > 0 ? timeInBed : (segTotal || 1);
+      const snorePct = Math.min(1, timeSnoring / base);
+      const intensity = Math.min(3, weighted / base); // 0..3
+      let snoreScore = snorePct * 5 + (intensity / 3) * 5;
+      snoreScore = Math.max(0, Math.min(10, snoreScore));
+      snoreScore = Math.round(snoreScore * 10) / 10;
+      return { timeInBed, timeSnoring, snorePct, snoreScore };
+    }
+    function finalizeNight(partial) {
+      const m = computeMetrics(partial.start, partial.end, partial.delayMinutes, partial.segments);
+      return { ...partial, ...m };
+    }
+
+    /* ========================= Domain: synthesis ========================= */
+    function propensityFor(remedies, factors, rng) {
+      let p = 0.52;
+      for (const r of remedies) p -= (r === 'Side Sleeping' ? 0.22 : 0.12);
+      for (const f of factors) p += (f === 'Alcohol' ? 0.18 : 0.11);
+      p += (rng() - 0.5) * 0.12;
+      return Math.max(0.06, Math.min(0.95, p));
+    }
+    function synthSegments(timeInBedMs, propensity, rng) {
+      const segs = [];
+      let t = 0;
+      // gentle night-shape: more snoring in the middle third
+      while (t < timeInBedMs) {
+        let blk = (4 + Math.floor(rng() * 8)) * 60000; // 4–11 min
+        if (t + blk > timeInBedMs) blk = timeInBedMs - t;
+        const phase = t / timeInBedMs;
+        const shape = 0.7 + 0.6 * Math.sin(Math.PI * phase); // 0.7..1.3
+        const p = Math.min(0.97, propensity * shape);
+        const r = rng();
+        let level, peak;
+        if (r < 0.02) { level = 'Noise'; peak = 0.58 + rng() * 0.35; }
+        else if (r > p) { level = 'Quiet'; peak = rng() * 0.04; }
+        else {
+          const s = rng();
+          if (s < 0.5) { level = 'Light'; peak = 0.06 + rng() * 0.08; }
+          else if (s < 0.82) { level = 'Loud'; peak = 0.16 + rng() * 0.13; }
+          else { level = 'Epic'; peak = 0.32 + rng() * 0.22; }
+        }
+        segs.push({ tStart: t, tEnd: t + blk, level, peak: Math.round(peak * 100) / 100 });
+        t += blk;
+      }
+      return segs;
+    }
+    function synthesizeNight({ endTs, remedies, factors, delayMinutes, seed, propensityOverride }) {
+      const rng = mulberry32(seed);
+      const durationH = 6.4 + rng() * 1.7; // 6.4–8.1h
+      const totalMs = Math.round(durationH * 3600000);
+      const delayMs = delayMinutes * 60000;
+      const start = endTs - totalMs;
+      const end = endTs;
+      const timeInBed = totalMs - delayMs;
+      const prop = propensityOverride != null ? propensityOverride : propensityFor(remedies, factors, rng);
+      const segments = synthSegments(timeInBed, prop, rng);
+      return finalizeNight({
+        id: uid(), start, end, delayMinutes,
+        remedies: [...remedies], factors: [...factors], segments,
+        simulated: true,
+      });
+    }
+
+    /* ========================= Persistence ========================= */
+    function loadNights() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      catch { return []; }
+    }
+    function persist(nights) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nights)); } catch (e) {}
+    }
+    function seedDemoNights() {
+      // Deterministic demo week: Side Sleeping nights snore less → Trends is meaningful.
+      const plan = [
+        { day: 1, remedies: ['Side Sleeping'],                factors: [] },
+        { day: 2, remedies: [],                               factors: ['Alcohol'] },
+        { day: 3, remedies: ['Side Sleeping', 'Nasal Strip'], factors: [] },
+        { day: 4, remedies: [],                               factors: ['Ate Late'] },
+        { day: 5, remedies: ['Side Sleeping'],                factors: ['Exhaustion'] },
+        { day: 6, remedies: ['Nasal Strip'],                  factors: [] },
+        { day: 7, remedies: [],                               factors: ['Alcohol', 'Weight'] },
+      ];
+      const nights = [];
+      const now = new Date();
+      for (const p of plan) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - p.day);
+        d.setHours(6, 50, 0, 0); // woke ~6:50am
+        nights.push(synthesizeNight({
+          endTs: d.getTime(),
+          remedies: p.remedies,
+          factors: p.factors,
+          delayMinutes: 10,
+          seed: 1000 + p.day,
+        }));
+      }
+      return nights;
+    }
+
+    /* ========================= Reusable UI ========================= */
+    function Disclaimer({ cls = '' }) {
+      return html`<div class=${'flex items-center gap-2 text-[11px] leading-tight text-slate-500 ' + cls}>
+        <${Icon} name="shield" size=13 cls="text-slate-600" />
+        <span>${DISCLAIMER} No diagnosis.</span>
+      </div>`;
+    }
+
+    function Gauge({ score, size = 128, stroke = 11 }) {
+      const r = (size - stroke) / 2;
+      const c = 2 * Math.PI * r;
+      const pct = Math.max(0, Math.min(1, score / 10));
+      const col = scoreColor(score);
+      return html`<div class="relative no-select" style=${{ width: size + 'px', height: size + 'px' }}>
+        <svg width=${size} height=${size} class="-rotate-90">
+          <circle cx=${size / 2} cy=${size / 2} r=${r} fill="none" stroke="#1e293b" stroke-width=${stroke} />
+          <circle cx=${size / 2} cy=${size / 2} r=${r} fill="none" stroke=${col} stroke-width=${stroke}
+            stroke-linecap="round" stroke-dasharray=${c} stroke-dashoffset=${c * (1 - pct)}
+            style=${{ transition: 'stroke-dashoffset .6s ease' }} />
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <span class="font-bold leading-none" style=${{ fontSize: size * 0.3 + 'px', color: col }}>${score.toFixed(1)}</span>
+          <span class="text-slate-400 font-medium" style=${{ fontSize: size * 0.09 + 'px' }}>/ 10</span>
+        </div>
+      </div>`;
+    }
+
+    function TimelineBar({ segments, height = 26, showSpikes = false }) {
+      const total = segments.reduce((a, s) => a + (s.tEnd - s.tStart), 0) || 1;
+      return html`<div class="w-full">
+        ${showSpikes && html`<${Spikes} segments=${segments} total=${total} />`}
+        <div class="flex w-full overflow-hidden rounded-md" style=${{ height: height + 'px' }}>
+          ${segments.map((s, i) => html`<div key=${i}
+            style=${{ flexGrow: (s.tEnd - s.tStart), flexBasis: 0, background: LEVEL_COLORS[s.level] }}
+            title=${s.level}></div>`)}
+        </div>
+      </div>`;
+    }
+
+    function Spikes({ segments, total, height = 34 }) {
+      const W = 300, H = height;
+      const pts = [];
+      let acc = 0;
+      for (const s of segments) {
+        const x1 = (acc / total) * W;
+        acc += (s.tEnd - s.tStart);
+        const x2 = (acc / total) * W;
+        const y = H - Math.min(1, s.peak) * (H - 2) - 1;
+        pts.push(x1.toFixed(1) + ',' + y.toFixed(1));
+        pts.push(x2.toFixed(1) + ',' + y.toFixed(1));
+      }
+      return html`<svg viewBox=${'0 0 ' + W + ' ' + H} preserveAspectRatio="none"
+        class="w-full mb-1" style=${{ height: height + 'px' }}>
+        <polyline points=${pts.join(' ')} fill="none" stroke="#38bdf8" stroke-width="1.4"
+          stroke-linejoin="round" opacity="0.9" />
+      </svg>`;
+    }
+
+    function Legend() {
+      return html`<div class="flex flex-wrap gap-x-3 gap-y-1">
+        ${LEVELS.map(l => html`<div key=${l} class="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <span class="w-2.5 h-2.5 rounded-sm" style=${{ background: LEVEL_COLORS[l] }}></span>${l}
+        </div>`)}
+      </div>`;
+    }
+
+    /* ========================= Setup / Tagging ========================= */
+    function TagItem({ item, selected, disabled, onToggle, onLongInfo }) {
+      const timer = useRef(null);
+      const longFired = useRef(false);
+      const start = () => {
+        longFired.current = false;
+        timer.current = setTimeout(() => { longFired.current = true; onLongInfo(item); }, 450);
+      };
+      const clear = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+      const click = () => {
+        if (longFired.current) { longFired.current = false; return; }
+        onToggle(item);
+      };
+      const base = 'relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors no-select ';
+      const cls = base + (selected
+        ? 'border-sky-500 bg-sky-500/15 text-sky-100'
+        : disabled
+          ? 'border-slate-800 bg-slate-900/40 text-slate-600'
+          : 'border-slate-800 bg-slate-900/70 text-slate-200 active:bg-slate-800');
+      return html`<button type="button" class=${cls}
+        onPointerDown=${start} onPointerUp=${clear} onPointerLeave=${clear} onPointerCancel=${clear}
+        onContextMenu=${e => e.preventDefault()} onClick=${click}>
+        <${Icon} name=${item.icon} size=18 cls=${selected ? 'text-sky-300' : 'text-slate-400'} />
+        <span class="text-sm font-medium flex-1 truncate">${item.name}</span>
+        ${selected
+          ? html`<span class="flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white"><${Icon} name="check" size=13 stroke=3 /></span>`
+          : html`<button type="button" class="text-slate-500 active:text-slate-300 p-0.5"
+              onClick=${e => { e.stopPropagation(); onLongInfo(item); }}><${Icon} name="info" size=15 /></button>`}
+      </button>`;
+    }
+
+    function Setup({ onStart, onSimulate, onGoResults, hasNights }) {
+      const [remedies, setRemedies] = useState([]);
+      const [factors, setFactors] = useState([]);
+      const [delay, setDelay] = useState(10);
+      const [soundscape, setSoundscape] = useState(false);
+      const [query, setQuery] = useState('');
+      const [info, setInfo] = useState(null);
+
+      const q = query.trim().toLowerCase();
+      const rShown = REMEDIES.filter(r => r.name.toLowerCase().includes(q));
+      const fShown = FACTORS.filter(f => f.name.toLowerCase().includes(q));
+
+      const toggleR = (item) => setRemedies(prev =>
+        prev.includes(item.name) ? prev.filter(x => x !== item.name)
+          : prev.length >= MAX_REMEDIES ? prev : [...prev, item.name]);
+      const toggleF = (item) => setFactors(prev =>
+        prev.includes(item.name) ? prev.filter(x => x !== item.name)
+          : prev.length >= MAX_FACTORS ? prev : [...prev, item.name]);
+
+      const config = { remedies, factors, delay, soundscape };
+
+      return html`<div class="px-4 pb-40 pt-3 fade-up">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">Tonight's setup</h1>
+            <p class="text-xs text-slate-500">Tag, then start in seconds.</p>
+          </div>
+          <div class="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sky-400"><${Icon} name="moon" /></div>
+        </div>
+
+        <!-- Delay picker -->
+        <section class="mb-5">
+          <div class="flex items-center gap-2 mb-2"><${Icon} name="clock" size=15 cls="text-slate-400" />
+            <h2 class="text-sm font-semibold text-slate-300">Fall-asleep delay</h2></div>
+          <p class="text-[11px] text-slate-500 mb-2">Recording is skipped during this window.</p>
+          <div class="grid grid-cols-5 gap-2">
+            ${DELAYS.map(d => html`<button key=${d} type="button" onClick=${() => setDelay(d)}
+              class=${'py-2 rounded-lg text-sm font-semibold border transition-colors no-select ' +
+                (delay === d ? 'border-sky-500 bg-sky-500/20 text-sky-200' : 'border-slate-800 bg-slate-900/60 text-slate-300 active:bg-slate-800')}>
+              ${d}m</button>`)}
+          </div>
+        </section>
+
+        <!-- Soundscape -->
+        <section class="mb-5">
+          <button type="button" onClick=${() => setSoundscape(s => !s)}
+            class="w-full flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-3 no-select active:bg-slate-800">
+            <div class=${'w-8 h-8 rounded-lg flex items-center justify-center ' + (soundscape ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400')}><${Icon} name="music" size=17 /></div>
+            <div class="flex-1 text-left">
+              <div class="text-sm font-medium text-slate-200">Soundscape</div>
+              <div class="text-[11px] text-slate-500">Calming audio to help you drift off</div>
+            </div>
+            <div class=${'w-11 h-6 rounded-full p-0.5 transition-colors ' + (soundscape ? 'bg-sky-500' : 'bg-slate-700')}>
+              <div class=${'w-5 h-5 rounded-full bg-white transition-transform ' + (soundscape ? 'translate-x-5' : '')}></div>
+            </div>
+          </button>
+        </section>
+
+        <!-- Search -->
+        <div class="relative mb-4">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><${Icon} name="search" size=16 /></span>
+          <input value=${query} onInput=${e => setQuery(e.target.value)} placeholder="Search remedies & factors"
+            class="w-full rounded-xl bg-slate-900/70 border border-slate-800 pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-600" />
+        </div>
+
+        <!-- Remedies -->
+        <section class="mb-5">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-slate-300">Remedies</h2>
+            <span class=${'text-xs font-medium ' + (remedies.length >= MAX_REMEDIES ? 'text-sky-400' : 'text-slate-500')}>${remedies.length}/${MAX_REMEDIES}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            ${rShown.map(item => html`<${TagItem} key=${item.name} item=${item}
+              selected=${remedies.includes(item.name)}
+              disabled=${!remedies.includes(item.name) && remedies.length >= MAX_REMEDIES}
+              onToggle=${toggleR} onLongInfo=${setInfo} />`)}
+            ${rShown.length === 0 && html`<p class="text-xs text-slate-600 col-span-2 py-2">No matches.</p>`}
+          </div>
+        </section>
+
+        <!-- Factors -->
+        <section class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-slate-300">Lifestyle factors</h2>
+            <span class=${'text-xs font-medium ' + (factors.length >= MAX_FACTORS ? 'text-sky-400' : 'text-slate-500')}>${factors.length}/${MAX_FACTORS}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            ${fShown.map(item => html`<${TagItem} key=${item.name} item=${item}
+              selected=${factors.includes(item.name)}
+              disabled=${!factors.includes(item.name) && factors.length >= MAX_FACTORS}
+              onToggle=${toggleF} onLongInfo=${setInfo} />`)}
+            ${fShown.length === 0 && html`<p class="text-xs text-slate-600 col-span-2 py-2">No matches.</p>`}
+          </div>
+        </section>
+
+        <p class="text-[11px] text-slate-600 mb-3 flex items-center gap-1.5"><${Icon} name="info" size=13 /> Long-press any tag for more info.</p>
+        <${Disclaimer} />
+
+        <!-- Sticky action bar -->
+        <div class="fixed bottom-16 inset-x-0 z-20">
+          <div class="mx-auto max-w-[430px] px-4 pb-2 pt-3 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+            <button type="button" onClick=${() => onStart(config)}
+              class="w-full flex items-center justify-center gap-2 rounded-2xl bg-sky-500 active:bg-sky-600 text-white font-semibold py-3.5 shadow-lg shadow-sky-500/20 no-select">
+              <${Icon} name="play" size=18 /> Confirm & Start Night
+              <span class="text-sky-100/90 text-xs font-normal">· ${remedies.length} rem, ${factors.length} fac</span>
+            </button>
+            <div class="flex gap-2 mt-2">
+              <button type="button" onClick=${() => onSimulate(config)}
+                class="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 active:bg-slate-800 text-slate-200 font-medium py-2.5 text-sm no-select">
+                <${Icon} name="flask" size=16 cls="text-emerald-400" /> Simulate night
+              </button>
+              ${hasNights && html`<button type="button" onClick=${onGoResults}
+                class="rounded-2xl border border-slate-800 bg-slate-900 active:bg-slate-800 text-slate-400 px-4 py-2.5 text-sm no-select">Results</button>`}
+            </div>
+          </div>
+        </div>
+
+        ${info && html`<${InfoModal} item=${info} onClose=${() => setInfo(null)} />`}
+      </div>`;
+    }
+
+    function InfoModal({ item, onClose }) {
+      return html`<div class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 fade-up" onClick=${onClose}>
+        <div class="w-full max-w-[430px] rounded-t-3xl bg-slate-900 border-t border-slate-700 p-5 pb-8" onClick=${e => e.stopPropagation()}>
+          <div class="mx-auto w-10 h-1 rounded-full bg-slate-700 mb-4"></div>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-10 h-10 rounded-xl bg-sky-500/15 text-sky-300 flex items-center justify-center"><${Icon} name=${item.icon} /></div>
+            <h3 class="text-lg font-semibold">${item.name}</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed">${item.info}</p>
+          <button type="button" onClick=${onClose} class="mt-5 w-full rounded-xl bg-slate-800 active:bg-slate-700 py-2.5 text-sm font-medium no-select">Got it</button>
+        </div>
+      </div>`;
+    }
+
+    /* ========================= Live recording ========================= */
+    function LiveScreen({ live, onStop, onSkipDelay }) {
+      const { phase, elapsed, delayRemaining, level, sampleCount, mode } = live;
+      const col = phase === 'delay' ? '#64748b' : LEVEL_COLORS[level] || '#38bdf8';
+      return html`<div class="px-4 pt-6 pb-24 flex flex-col items-center fade-up min-h-[70vh]">
+        <div class="text-xs uppercase tracking-widest text-slate-500 mb-1">${mode === 'real' ? 'Recording' : 'Live'}</div>
+        <h1 class="text-lg font-semibold mb-8">${phase === 'delay' ? 'Falling asleep…' : 'Listening to the night'}</h1>
+
+        <div class="relative flex items-center justify-center mb-8" style=${{ width: '180px', height: '180px' }}>
+          <div class="absolute inset-0 rounded-full rec-ring" style=${{ background: col + '22' }}></div>
+          <div class="absolute inset-3 rounded-full rec-ring" style=${{ background: col + '22', animationDelay: '.6s' }}></div>
+          <div class="relative w-32 h-32 rounded-full flex flex-col items-center justify-center border-2"
+            style=${{ borderColor: col, background: col + '18' }}>
+            <${Icon} name=${phase === 'delay' ? 'clock' : 'moon'} size=26 cls="mb-1" />
+            <span class="text-2xl font-bold tabular-nums">${fmtDur(elapsed)}</span>
+            <span class="text-[11px] text-slate-400">${phase === 'delay' ? 'delay' : 'in bed'}</span>
+          </div>
+        </div>
+
+        ${phase === 'delay'
+          ? html`<div class="text-center mb-6">
+              <p class="text-sm text-slate-400">Recording starts in <span class="font-semibold text-slate-200">${fmtDur(delayRemaining)}</span></p>
+              <button type="button" onClick=${onSkipDelay} class="mt-3 text-sky-400 text-sm font-medium active:text-sky-300 no-select">Skip delay & record now</button>
+            </div>`
+          : html`<div class="text-center mb-6">
+              <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium" style=${{ background: col + '22', color: col }}>
+                <span class="w-2 h-2 rounded-full" style=${{ background: col }}></span>${level}
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">${sampleCount} samples · audio stays on this device</p>
+            </div>`}
+
+        <button type="button" onClick=${onStop}
+          class="mt-4 flex items-center gap-2 rounded-2xl bg-rose-500 active:bg-rose-600 text-white font-semibold px-8 py-3.5 shadow-lg shadow-rose-500/20 no-select">
+          <${Icon} name="square" size=18 /> Stop & see results
+        </button>
+        <${Disclaimer} cls="mt-8 justify-center" />
+      </div>`;
+    }
+
+    /* ========================= Night detail ========================= */
+    function hourlyBins(night) {
+      const total = night.timeInBed || night.segments.reduce((a, s) => a + (s.tEnd - s.tStart), 0);
+      const nHours = Math.max(1, Math.ceil(total / 3600000));
+      const bins = Array.from({ length: nHours }, () => ({ Quiet: 0, Light: 0, Loud: 0, Epic: 0, Noise: 0 }));
+      for (const s of night.segments) {
+        let a = s.tStart; const b = s.tEnd;
+        while (a < b) {
+          const bi = Math.min(nHours - 1, Math.floor(a / 3600000));
+          const binEnd = (bi + 1) * 3600000;
+          const chunkEnd = Math.min(b, binEnd);
+          bins[bi][s.level] += (chunkEnd - a);
+          a = chunkEnd;
+        }
+      }
+      return bins;
+    }
+
+    function HourlyGraph({ night }) {
+      const bins = hourlyBins(night);
+      const stacked = SNORE_LEVELS;
+      const maxSnore = Math.max(1, ...bins.map(b => stacked.reduce((a, l) => a + b[l], 0)));
+      const startClock = night.start + night.delayMinutes * 60000;
+      return html`<div>
+        <div class="flex items-end gap-1.5 h-24">
+          ${bins.map((b, i) => {
+            const totalSnore = stacked.reduce((a, l) => a + b[l], 0);
+            const hPct = (totalSnore / maxSnore) * 100;
+            return html`<div key=${i} class="flex-1 flex flex-col items-center justify-end h-full">
+              <div class="w-full rounded-t-sm overflow-hidden flex flex-col-reverse" style=${{ height: hPct + '%', minHeight: totalSnore > 0 ? '3px' : '0' }}>
+                ${stacked.map(l => b[l] > 0 && html`<div key=${l} style=${{ height: (b[l] / totalSnore * 100) + '%', background: LEVEL_COLORS[l] }}></div>`)}
+              </div>
+            </div>`;
+          })}
+        </div>
+        <div class="flex justify-between mt-1 text-[9px] text-slate-600">
+          <span>${fmtClock(startClock)}</span>
+          <span>hours asleep</span>
+          <span>${fmtClock(night.end)}</span>
+        </div>
+      </div>`;
+    }
+
+    function TagChip({ name, map }) {
+      const item = map[name];
+      if (!item) return null;
+      return html`<div class="flex items-center gap-1 rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
+        <${Icon} name=${item.icon} size=12 cls="text-slate-400" />${name}</div>`;
+    }
+
+    function Detail({ night, onClose, onDelete }) {
+      const snorePctTxt = Math.round(night.snorePct * 100);
+      return html`<div class="fixed inset-0 z-40 bg-slate-950 overflow-y-auto fade-up">
+        <div class="max-w-[430px] mx-auto px-4 pt-4 pb-24">
+          <div class="flex items-center justify-between mb-4">
+            <button type="button" onClick=${onClose} class="flex items-center gap-1 text-slate-400 active:text-slate-200 no-select text-sm">
+              <span class="rotate-180"><${Icon} name="chevron" size=18 /></span> Back</button>
+            <div class="text-center">
+              <div class="text-sm font-semibold">${fmtDayLabel(night.start)}</div>
+              <div class="text-[11px] text-slate-500">${fmtClock(night.start)} – ${fmtClock(night.end)}${night.simulated ? ' · sim' : ''}</div>
+            </div>
+            <button type="button" onClick=${() => onDelete(night.id)} class="text-slate-600 active:text-rose-400 no-select p-1"><${Icon} name="trash" size=16 /></button>
+          </div>
+
+          <!-- Score -->
+          <div class="flex flex-col items-center py-3">
+            <${Gauge} score=${night.snoreScore} size=140 />
+            <div class="mt-2 text-sm font-medium" style=${{ color: scoreColor(night.snoreScore) }}>${scoreWord(night.snoreScore)} snoring</div>
+          </div>
+
+          <!-- Readouts -->
+          <div class="grid grid-cols-3 gap-2 my-4">
+            <div class="rounded-xl bg-slate-900 border border-slate-800 p-3 text-center">
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">In bed</div>
+              <div class="text-base font-bold mt-1">${fmtDur(night.timeInBed)}</div>
+            </div>
+            <div class="rounded-xl bg-slate-900 border border-slate-800 p-3 text-center">
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">Snoring</div>
+              <div class="text-base font-bold mt-1">${fmtDur(night.timeSnoring)}</div>
+            </div>
+            <div class="rounded-xl bg-slate-900 border border-slate-800 p-3 text-center">
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">% of night</div>
+              <div class="text-base font-bold mt-1">${snorePctTxt}%</div>
+            </div>
+          </div>
+
+          <!-- Timeline -->
+          <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+            <h3 class="text-sm font-semibold mb-2 flex items-center gap-2"><${Icon} name="trending" size=15 cls="text-sky-400" /> Night timeline</h3>
+            <${TimelineBar} segments=${night.segments} height=28 showSpikes=${true} />
+            <div class="mt-3"><${Legend} /></div>
+          </div>
+
+          <!-- Hourly -->
+          <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+            <h3 class="text-sm font-semibold mb-3 flex items-center gap-2"><${Icon} name="list" size=15 cls="text-sky-400" /> Snoring by hour</h3>
+            <${HourlyGraph} night=${night} />
+          </div>
+
+          <!-- Tags -->
+          ${(night.remedies.length > 0 || night.factors.length > 0) && html`<div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+            <h3 class="text-sm font-semibold mb-3">Tagged this night</h3>
+            <div class="flex flex-wrap gap-1.5">
+              ${night.remedies.map(n => html`<${TagChip} key=${n} name=${n} map=${REMEDY_MAP} />`)}
+              ${night.factors.map(n => html`<${TagChip} key=${n} name=${n} map=${FACTOR_MAP} />`)}
+            </div>
+          </div>`}
+
+          <!-- BreathFlow upgrade placeholder -->
+          <div class="rounded-2xl border border-sky-800/50 bg-gradient-to-br from-sky-900/30 to-slate-900 p-4 mb-4">
+            <div class="flex items-center gap-2 mb-1"><${Icon} name="sparkles" size=16 cls="text-sky-300" />
+              <h3 class="text-sm font-semibold text-sky-200">BreathFlow upgrade</h3>
+              <span class="ml-auto text-[10px] uppercase tracking-wide bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full">Soon</span></div>
+            <p class="text-xs text-slate-400 leading-relaxed">Guided breathing programs & AI airway coaching to build lasting habits. Coming to SnoreNoMore.</p>
+          </div>
+
+          <${Disclaimer} />
+        </div>
+      </div>`;
+    }
+
+    /* ========================= Results ========================= */
+    function MiniScore({ score }) {
+      const r = 11, c = 2 * Math.PI * r, pct = score / 10;
+      return html`<div class="relative w-8 h-8 shrink-0">
+        <svg width="32" height="32" class="-rotate-90">
+          <circle cx="16" cy="16" r=${r} fill="none" stroke="#1e293b" stroke-width="3.5" />
+          <circle cx="16" cy="16" r=${r} fill="none" stroke=${scoreColor(score)} stroke-width="3.5"
+            stroke-linecap="round" stroke-dasharray=${c} stroke-dashoffset=${c * (1 - pct)} />
+        </svg>
+        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold" style=${{ color: scoreColor(score) }}>${score.toFixed(1)}</span>
+      </div>`;
+    }
+
+    function Results({ nights, onOpen, onGoRecord }) {
+      const sorted = [...nights].sort((a, b) => b.start - a.start);
+      const groups = [];
+      let cur = null;
+      for (const n of sorted) {
+        const k = monthKey(n.start);
+        if (!cur || cur.key !== k) { cur = { key: k, label: monthLabel(n.start), items: [] }; groups.push(cur); }
+        cur.items.push(n);
+      }
+      return html`<div class="px-4 pt-3 pb-24 fade-up">
+        <h1 class="text-xl font-bold tracking-tight mb-1">Results</h1>
+        <p class="text-xs text-slate-500 mb-4">${nights.length} night${nights.length === 1 ? '' : 's'} recorded on this device.</p>
+        ${sorted.length === 0
+          ? html`<div class="text-center py-16">
+              <div class="w-14 h-14 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-500 mb-3"><${Icon} name="moon" size=26 /></div>
+              <p class="text-slate-400 text-sm mb-4">No nights yet.</p>
+              <button type="button" onClick=${onGoRecord} class="rounded-xl bg-sky-500 active:bg-sky-600 text-white font-medium px-5 py-2.5 text-sm no-select">Start your first night</button>
+            </div>`
+          : groups.map(g => html`<section key=${g.key} class="mb-5">
+              <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">${g.label}</h2>
+              <div class="space-y-2">
+                ${g.items.map(n => html`<button key=${n.id} type="button" onClick=${() => onOpen(n.id)}
+                  class="w-full flex items-center gap-3 rounded-2xl bg-slate-900 border border-slate-800 p-3 active:bg-slate-800 no-select text-left">
+                  <${MiniScore} score=${n.snoreScore} />
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-semibold">${fmtDayLabel(n.start)}</span>
+                      <span class="text-[11px] text-slate-500">${fmtDur(night_snoring(n))} snoring</span>
+                    </div>
+                    <div class="mt-1.5"><${TimelineBar} segments=${n.segments} height=8 /></div>
+                    <div class="flex items-center gap-1 mt-1.5 flex-wrap">
+                      ${n.remedies.map(nm => html`<span key=${nm} class="text-slate-400"><${Icon} name=${(REMEDY_MAP[nm]||{}).icon||'circle'} size=13 /></span>`)}
+                      ${n.factors.map(nm => html`<span key=${nm} class="text-slate-500"><${Icon} name=${(FACTOR_MAP[nm]||{}).icon||'circle'} size=13 /></span>`)}
+                      ${(n.remedies.length + n.factors.length === 0) && html`<span class="text-[10px] text-slate-600">no tags</span>`}
+                    </div>
+                  </div>
+                  <span class="text-slate-600"><${Icon} name="chevron" size=18 /></span>
+                </button>`)}
+              </div>
+            </section>`)}
+        <${Disclaimer} cls="mt-4" />
+      </div>`;
+    }
+    function night_snoring(n) { return n.timeSnoring; }
+
+    /* ========================= Trends ========================= */
+    function Trends({ nights, onSimulate }) {
+      const [windowDays, setWindowDays] = useState(7);
+      const [remedy, setRemedy] = useState('Side Sleeping');
+      const cutoff = Date.now() - windowDays * 86400000;
+      const inWindow = nights.filter(n => n.start >= cutoff);
+
+      const onNights = inWindow.filter(n => n.remedies.includes(remedy));
+      const offNights = inWindow.filter(n => !n.remedies.includes(remedy));
+      const avg = arr => arr.length ? arr.reduce((a, n) => a + n.snoreScore, 0) / arr.length : null;
+      const onAvg = avg(onNights), offAvg = avg(offNights);
+      const maxBar = Math.max(1, onAvg || 0, offAvg || 0);
+
+      let verdict = null;
+      if (onAvg != null && offAvg != null) {
+        const diff = offAvg - onAvg; // positive => remedy lowers score => helps
+        if (Math.abs(diff) < 0.4) verdict = { txt: 'No clear difference yet.', col: 'text-slate-400' };
+        else if (diff > 0) verdict = { txt: `${remedy} averages ${diff.toFixed(1)} points lower — it seems to help.`, col: 'text-emerald-400' };
+        else verdict = { txt: `${remedy} averages ${Math.abs(diff).toFixed(1)} points higher — not helping here.`, col: 'text-amber-400' };
+      }
+
+      const sortedIn = [...inWindow].sort((a, b) => a.start - b.start);
+      const maxScore = Math.max(1, ...sortedIn.map(n => n.snoreScore));
+
+      return html`<div class="px-4 pt-3 pb-24 fade-up">
+        <h1 class="text-xl font-bold tracking-tight mb-1">Trends</h1>
+        <p class="text-xs text-slate-500 mb-4">Does a remedy actually help? Compare ON vs OFF.</p>
+
+        <!-- window toggle -->
+        <div class="inline-flex rounded-xl bg-slate-900 border border-slate-800 p-1 mb-4">
+          ${[7, 30].map(d => html`<button key=${d} type="button" onClick=${() => setWindowDays(d)}
+            class=${'px-4 py-1.5 rounded-lg text-sm font-medium no-select ' + (windowDays === d ? 'bg-sky-500 text-white' : 'text-slate-400')}>${d} days</button>`)}
+        </div>
+
+        ${inWindow.length === 0
+          ? html`<div class="text-center py-14">
+              <p class="text-slate-400 text-sm mb-4">No nights in the last ${windowDays} days.</p>
+              <button type="button" onClick=${onSimulate} class="rounded-xl bg-emerald-500 active:bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm no-select inline-flex items-center gap-2"><${Icon} name="flask" size=16 /> Simulate a night</button>
+            </div>`
+          : html`<div>
+            <!-- remedy selector -->
+            <label class="text-xs font-semibold text-slate-400 mb-2 block">Compare remedy</label>
+            <div class="flex flex-wrap gap-2 mb-5">
+              ${REMEDIES.map(r => html`<button key=${r.name} type="button" onClick=${() => setRemedy(r.name)}
+                class=${'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border no-select ' +
+                  (remedy === r.name ? 'border-sky-500 bg-sky-500/15 text-sky-200' : 'border-slate-800 bg-slate-900 text-slate-400')}>
+                <${Icon} name=${r.icon} size=13 />${r.name}</button>`)}
+            </div>
+
+            <!-- ON vs OFF -->
+            <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+              <h3 class="text-sm font-semibold mb-4">Avg Snore Score · ${remedy}</h3>
+              <div class="flex items-end justify-around gap-6 h-40">
+                ${[{ k: 'ON', v: onAvg, n: onNights.length, col: '#10b981' }, { k: 'OFF', v: offAvg, n: offNights.length, col: '#ef4444' }].map(b => html`
+                  <div key=${b.k} class="flex-1 flex flex-col items-center justify-end h-full max-w-[110px]">
+                    <span class="text-lg font-bold mb-1" style=${{ color: b.v == null ? '#475569' : b.col }}>${b.v == null ? '—' : b.v.toFixed(1)}</span>
+                    <div class="w-full rounded-t-lg transition-all" style=${{ height: (b.v == null ? 2 : (b.v / maxBar) * 100) + '%', minHeight: '2px', background: b.v == null ? '#1e293b' : b.col }}></div>
+                    <span class="text-xs font-semibold mt-2 text-slate-300">${b.k}</span>
+                    <span class="text-[10px] text-slate-500">${b.n} night${b.n === 1 ? '' : 's'}</span>
+                  </div>`)}
+              </div>
+              ${verdict && html`<p class=${'text-sm font-medium mt-4 text-center ' + verdict.col}>${verdict.txt}</p>`}
+              ${(!verdict) && html`<p class="text-xs text-slate-500 mt-4 text-center">Need nights both with and without ${remedy} to compare. Tag it (or simulate) on more nights.</p>`}
+            </div>
+
+            <!-- nightly scores -->
+            <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+              <h3 class="text-sm font-semibold mb-3">Nightly scores</h3>
+              <div class="flex items-end gap-1.5 h-24">
+                ${sortedIn.map(n => html`<div key=${n.id} class="flex-1 flex flex-col items-center justify-end h-full" title=${fmtDayLabel(n.start)}>
+                  <div class="w-full rounded-t-sm" style=${{ height: (n.snoreScore / maxScore * 100) + '%', minHeight: '3px', background: scoreColor(n.snoreScore) }}></div>
+                </div>`)}
+              </div>
+              <div class="flex justify-between mt-1 text-[9px] text-slate-600"><span>${fmtDayLabel(sortedIn[0].start)}</span><span>${fmtDayLabel(sortedIn[sortedIn.length - 1].start)}</span></div>
+            </div>
+          </div>`}
+        <${Disclaimer} cls="mt-2" />
+      </div>`;
+    }
+
+    /* ========================= Nav ========================= */
+    function NavBar({ view, setView, disabled }) {
+      const tabs = [
+        { k: 'record', label: 'Record', icon: 'moon' },
+        { k: 'results', label: 'Results', icon: 'list' },
+        { k: 'trends', label: 'Trends', icon: 'trending' },
+      ];
+      return html`<nav class="fixed bottom-0 inset-x-0 z-30 bg-slate-950/95 backdrop-blur border-t border-slate-800">
+        <div class="max-w-[430px] mx-auto flex">
+          ${tabs.map(t => html`<button key=${t.k} type="button" disabled=${disabled}
+            onClick=${() => !disabled && setView(t.k)}
+            class=${'flex-1 flex flex-col items-center gap-1 py-2.5 no-select ' +
+              (disabled ? 'text-slate-700' : view === t.k ? 'text-sky-400' : 'text-slate-500 active:text-slate-300')}>
+            <${Icon} name=${t.icon} size=21 />
+            <span class="text-[10px] font-medium">${t.label}</span>
+          </button>`)}
+        </div>
+      </nav>`;
+    }
+
+    /* ========================= App ========================= */
+    function App() {
+      const [nights, setNights] = useState(() => {
+        const existing = loadNights();
+        if (existing.length === 0 && !localStorage.getItem(SEED_FLAG)) {
+          const demo = seedDemoNights();
+          persist(demo);
+          try { localStorage.setItem(SEED_FLAG, '1'); } catch (e) {}
+          return demo;
+        }
+        return existing;
+      });
+      const [view, setView] = useState('record');
+      const [detailId, setDetailId] = useState(null);
+      const [live, setLive] = useState(null); // null | {phase, elapsed, ...}
+
+      const audioRef = useRef(null);
+      const recRef = useRef(null);
+      const rafRef = useRef(0);
+
+      const saveNight = useCallback((night) => {
+        setNights(prev => { const next = [night, ...prev]; persist(next); return next; });
+      }, []);
+      const deleteNight = useCallback((id) => {
+        setNights(prev => { const next = prev.filter(n => n.id !== id); persist(next); return next; });
+        setDetailId(null);
+      }, []);
+
+      const detailNight = detailId ? nights.find(n => n.id === detailId) : null;
+
+      /* ---- Simulate ---- */
+      const doSimulate = useCallback((config) => {
+        const night = synthesizeNight({
+          endTs: Date.now(),
+          remedies: config.remedies || [],
+          factors: config.factors || [],
+          delayMinutes: config.delay || 10,
+          seed: (Math.random() * 1e9) | 0,
+        });
+        saveNight(night);
+        setDetailId(night.id);
+      }, [saveNight]);
+
+      /* ---- Real recording ---- */
+      const stopAudio = () => {
+        cancelAnimationFrame(rafRef.current);
+        const a = audioRef.current;
+        if (a) {
+          try { a.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+          try { a.ctx.close(); } catch (e) {}
+        }
+        audioRef.current = null;
+      };
+
+      const startReal = useCallback(async (config) => {
+        const delayMinutes = config.delay || 10;
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          alert('Microphone access is needed to record a real night.\n\nNo audio ever leaves your device. You can also tap "Simulate night" to demo the full flow without the mic.');
+          return;
+        }
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        src.connect(analyser);
+        const data = new Uint8Array(analyser.fftSize);
+        audioRef.current = { ctx, stream, analyser, data };
+
+        const start = Date.now();
+        recRef.current = {
+          start, delayMs: delayMinutes * 60000, delayMinutes,
+          remedies: config.remedies || [], factors: config.factors || [],
+          samples: [], lastSampleAt: 0, lastUiAt: 0,
+        };
+        setLive({ phase: 'delay', elapsed: 0, delayRemaining: recRef.current.delayMs, level: 'Quiet', sampleCount: 0, mode: 'real' });
+        if (view !== 'record') setView('record');
+
+        const GAIN = 3.4;
+        const tick = () => {
+          const r = recRef.current;
+          if (!r) return;
+          const now = Date.now();
+          const sinceStart = now - r.start;
+          const inDelay = sinceStart < r.delayMs;
+
+          if (!inDelay) {
+            const captureStart = r.start + r.delayMs;
+            if (now - r.lastSampleAt >= 1000) {
+              r.lastSampleAt = now;
+              const a = audioRef.current;
+              if (a) {
+                a.analyser.getByteTimeDomainData(a.data);
+                let sum = 0;
+                for (let i = 0; i < a.data.length; i++) { const x = (a.data[i] - 128) / 128; sum += x * x; }
+                const rms = Math.sqrt(sum / a.data.length);
+                const amp = Math.min(1, rms * GAIN);
+                r.samples.push(amp);
+              }
+            }
+            if (now - r.lastUiAt >= 300) {
+              r.lastUiAt = now;
+              const last = r.samples.length ? r.samples[r.samples.length - 1] : 0;
+              setLive({ phase: 'capture', elapsed: now - captureStart, delayRemaining: 0, level: ampToLevel(last), sampleCount: r.samples.length, mode: 'real' });
+            }
+          } else {
+            if (now - r.lastUiAt >= 300) {
+              r.lastUiAt = now;
+              setLive({ phase: 'delay', elapsed: sinceStart, delayRemaining: r.delayMs - sinceStart, level: 'Quiet', sampleCount: 0, mode: 'real' });
+            }
+          }
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      }, [view]);
+
+      const skipDelay = useCallback(() => {
+        const r = recRef.current;
+        if (!r) return;
+        r.delayMs = Date.now() - r.start;
+        r.delayMinutes = r.delayMs / 60000;
+      }, []);
+
+      const stopReal = useCallback(() => {
+        const r = recRef.current;
+        stopAudio();
+        recRef.current = null;
+        if (!r) { setLive(null); return; }
+        const segments = samplesToSegments(r.samples, 1000);
+        const capturedMs = r.samples.length * 1000;
+        const start = r.start;
+        const delayMinutes = r.delayMinutes;
+        const end = start + r.delayMs + capturedMs;
+        const night = finalizeNight({
+          id: uid(), start, end, delayMinutes,
+          remedies: r.remedies, factors: r.factors, segments, simulated: false,
+        });
+        saveNight(night);
+        setLive(null);
+        setDetailId(night.id);
+      }, [saveNight]);
+
+      useEffect(() => () => stopAudio(), []);
+
+      const recording = !!live;
+
+      return html`<div class="max-w-[430px] mx-auto min-h-screen relative">
+        ${recording
+          ? html`<${LiveScreen} live=${live} onStop=${stopReal} onSkipDelay=${skipDelay} />`
+          : view === 'record'
+            ? html`<${Setup} onStart=${startReal} onSimulate=${doSimulate}
+                onGoResults=${() => setView('results')} hasNights=${nights.length > 0} />`
+            : view === 'results'
+              ? html`<${Results} nights=${nights} onOpen=${setDetailId} onGoRecord=${() => setView('record')} />`
+              : html`<${Trends} nights=${nights} onSimulate=${() => doSimulate({ remedies: [], factors: [], delay: 10 })} />`}
+
+        ${detailNight && html`<${Detail} night=${detailNight} onClose=${() => setDetailId(null)} onDelete=${deleteNight} />`}
+        ${!recording && !detailNight && html`<${NavBar} view=${view} setView=${setView} disabled=${false} />`}
+      </div>`;
+    }
+
+    /* ========================= Audio classification helpers ========================= */
+    function ampToLevel(a) {
+      if (a >= 0.55) return 'Noise';
+      if (a >= 0.30) return 'Epic';
+      if (a >= 0.15) return 'Loud';
+      if (a >= 0.05) return 'Light';
+      return 'Quiet';
+    }
+    function samplesToSegments(samples, msPerSample) {
+      const segs = [];
+      let cur = null;
+      for (let i = 0; i < samples.length; i++) {
+        const amp = samples[i];
+        const level = ampToLevel(amp);
+        const tStart = i * msPerSample;
+        const tEnd = tStart + msPerSample;
+        if (cur && cur.level === level) { cur.tEnd = tEnd; cur.peak = Math.max(cur.peak, amp); }
+        else { if (cur) segs.push(cur); cur = { tStart, tEnd, level, peak: Math.round(amp * 100) / 100 }; }
+      }
+      if (cur) segs.push(cur);
+      return segs;
+    }
+
+    render(html`<${App} />`, document.getElementById('app'));
+  </script>
+</body>
+</html>
