@@ -1,0 +1,59 @@
+- id: "1"
+  title: PWA shell, navigation & compliance disclaimer
+  description: >-
+    Scaffold /snorelab-local/index.html + manifest.json (Preact + Tailwind +
+    lucide via CDN, no build) with Record/Results/Trends navigation and the
+    "Not medical advice. For apnea risk see doctor." disclaimer visible. Serves
+    CAP-6 and the base of CAP-1.
+  invoke_dev_with: >-
+    Single static deliverable at /snorelab-local — no npm install, opens at
+    http://localhost:8000, iPhone SE 2023 (375x667) target, standalone PWA.
+    All-local, no network calls. See SPEC.md + stack.md.
+- id: "2"
+  title: Nightly setup & tagging
+  description: >-
+    Fall-asleep delay picker (5/10/15/20/30m), Remedy/Factor multi-select with
+    search + long-press info + checkmarks + Confirm count (max 3 remedies, 2
+    factors), optional Soundscape toggle, and a Start action. Serves CAP-1.
+  invoke_dev_with: >-
+    Start must be reachable in <10s from opening setup. Persist the night's
+    delay/remedies/factors selections for use by capture and quantification.
+- id: "3"
+  title: All-night capture & intensity classification (+ demo path)
+  description: >-
+    getUserMedia + Web Audio level sampling classifying intervals into
+    Quiet/Light/Loud/Epic/Noise with spikes, suppressing recording during the
+    delay window; plus a synthetic/accelerated demo night so the loop is
+    demonstrable at a desk. Serves CAP-2.
+  invoke_dev_with: >-
+    Audio never leaves the device. Provide a simulate/demo night that yields a
+    realistic segmented timeline without a real night, but keep the real mic
+    path intact.
+- id: "4"
+  title: Morning quantification & night detail view
+  description: >-
+    On stop compute Time in Bed (end-start-delay), Time Snoring (Light+Loud+
+    Epic), Snore % and Snore Score 0-10, and render segmented timeline, circular
+    score, hourly graph + legend, Time in Bed / Time Snoring, and BreathFlow
+    upgrade placeholder. Serves CAP-3.
+  invoke_dev_with: >-
+    Formulas are authoritative in stack.md. Detail must appear immediately on
+    stop showing score, Time Snoring + % and the segmented timeline.
+- id: "5"
+  title: Results history grouped by month
+  description: >-
+    Persist nights in localStorage and list them grouped by month with a
+    mini-timeline, remedy/factor icons and circular score; each row opens the
+    story-4 detail view. Serves CAP-4.
+  invoke_dev_with: >-
+    Single namespaced localStorage key; no backend. Reuse the detail view from
+    story 4.
+- id: "6"
+  title: 7-day Trends correlation
+  description: >-
+    Aggregate the last 7 days and let the user select any tagged remedy to
+    compare average Snore Score with the remedy ON vs OFF, visibly showing
+    whether it helps. Serves CAP-5.
+  invoke_dev_with: >-
+    Selecting a remedy shows ON-vs-OFF average Snore Score. Trends limited to
+    7/30 days only.
