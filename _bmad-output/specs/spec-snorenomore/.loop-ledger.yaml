@@ -1,0 +1,25 @@
+outcome: "An adult user can complete a nightly closed-loop to reduce snoring: (1) START a night recording in <10 seconds after tagging up to 3 remedies and 2 lifestyle factors; (2) STOP in the morning and immediately see that night's timeline segmented into Quiet / Light / Loud / Epic / Noise with spikes, a Snore Score 0-10, and Time Snoring + %; (3) COMPARE in a 7-day Trends view where the user can select any remedy and visually compare average Snore Score with remedy ON vs OFF."
+outcome_source: seed
+slug: snorenomore
+branch: loop/snorenomore
+round_cap: 2
+rounds:
+  - n: 1
+    round_tag: loop-round-1
+    capabilities_added: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6]
+    stories:
+      - {id: "1", status: done}
+      - {id: "2", status: done}
+      - {id: "3", status: done}
+      - {id: "4", status: done}
+      - {id: "5", status: done}
+      - {id: "6", status: done}
+    retro_verdict: accepted-with-open-items
+    retro_archive: RETROSPECTIVE-round-1.md
+    judges:
+      ux: {outcome_met: true, score: 0.95, blocking: []}
+      ba: {outcome_met: true, score: 0.9, blocking: []}
+    open_blocking_count: 0
+    actioned_refs: []
+    decision: stop-accepted
+    reason: "Dual-judge consensus outcome_met=true (UX 0.95, BA 0.9), retro not rejected, zero blocking items. Consensus stop reached at round 1, before round_cap=2. Augmentations (UX-1..4, BA-1..4) recorded as non-blocking backlog."
