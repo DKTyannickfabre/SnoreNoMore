@@ -1,0 +1,57 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: '2026-08-30'
+last_updated: '2026-08-30'
+project: SnoreNoMore
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/stories
+development_status:
+  epic-1: backlog
+  1-1-gate-the-helps-verdict-behind-a-minimum-nights-per-side-thre: backlog
+  1-2-show-sample-size-honesty-n-spread-alongside-on-off-averages: backlog
+  1-3-default-trends-to-a-remedy-that-has-both-on-and-off-nights: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-mark-simulated-nights-with-an-explicit-simulated-badge-and-n: backlog
+  2-2-de-dupe-and-label-multiple-same-day-nights: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-make-the-i-tag-info-tappable-in-every-tile-state: backlog
+  3-2-tap-to-inspect-spike-times-on-the-timeline-and-hourly-graph: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-prime-the-microphone-permission-before-the-os-prompt: backlog
+  4-2-keep-an-honest-actionable-fallback-when-permission-is-denied: backlog
+  epic-4-retrospective: optional
