@@ -37,7 +37,7 @@
 
   <script type="module">
     import { h, render } from 'https://esm.sh/preact@10.24.3';
-    import { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/preact@10.24.3/hooks';
+    import { useState, useEffect, useRef, useCallback } from 'https://esm.sh/preact@10.24.3/hooks';
     import htm from 'https://esm.sh/htm@3.1.1';
     const html = htm.bind(h);
 
@@ -461,16 +461,19 @@
         : disabled
           ? 'border-slate-800 bg-slate-900/40 text-slate-600'
           : 'border-slate-800 bg-slate-900/70 text-slate-200 active:bg-slate-800');
-      return html`<button type="button" class=${cls}
+      // A native <button> can't contain another interactive <button> (invalid nesting, unreliable
+      // VoiceOver focus/activation) — the outer tile is a div with button semantics instead.
+      const keydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click(); } };
+      return html`<div role="button" tabindex="0" class=${cls}
         onPointerDown=${start} onPointerUp=${clear} onPointerLeave=${clear} onPointerCancel=${clear}
-        onContextMenu=${e => e.preventDefault()} onClick=${click}>
+        onContextMenu=${e => e.preventDefault()} onClick=${click} onKeyDown=${keydown}>
         <${Icon} name=${item.icon} size=18 cls=${selected ? 'text-sky-300' : 'text-slate-400'} />
         <span class="text-sm font-medium flex-1 truncate">${item.name}</span>
         ${selected && html`<span class="flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white shrink-0"><${Icon} name="check" size=13 stroke=3 /></span>`}
         <button type="button" class="relative shrink-0 p-[13px] -m-[13px] text-slate-500 active:text-slate-300"
           aria-label=${'About ' + item.name}
           onClick=${e => { e.stopPropagation(); onLongInfo(item); }}><${Icon} name="info" size=18 /></button>
-      </button>`;
+      </div>`;
     }
 
     function Setup({ onStart, onSimulate, onGoResults, hasNights }) {
